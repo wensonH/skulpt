@@ -1,3 +1,6 @@
+/* eslint-disable semi */
+/* eslint-disable indent */
+/* eslint-disable quotes */
 var tokens = Sk.token.tokens
 
 const TokenError = Error;
@@ -228,7 +231,8 @@ function _tokenize(readline, encoding, yield_) {
     var Intnumber = group(Hexnumber, Binnumber,
                           (Sk.__future__.silent_octal_literal ? SilentOctnumber : Octnumber), Decnumber);
     var Number_ = group(Imagnumber, Floatnumber, Intnumber);
-    var PseudoToken = Whitespace + group(PseudoExtras, Number_, Funny, ContStr, Name);
+    var Mix = '([_a-zA-Z\\u4E00-\\u9FA5]+\\d*)+'
+    var PseudoToken = Whitespace + group(PseudoExtras, Number_, Funny, ContStr, Name, Mix);
 
     const PseudoTokenRegexp = new RegExp(PseudoToken);
 
@@ -366,7 +370,6 @@ function _tokenize(readline, encoding, yield_) {
                 pos += 1;
                 capos = line.charAt(pos);
             }
-
             pseudomatch = PseudoTokenRegexp.exec(line.substring(pos))
             if (pseudomatch) {                                // scan for tokens
                 var start = pos;
@@ -380,7 +383,6 @@ function _tokenize(readline, encoding, yield_) {
 
                 var token = line.substring(start, end);
                 var initial = line[start];
-                //console.log("token:",token, "initial:",initial, start, end);
                 if (contains(numchars, initial) ||                 // ordinary number
                     (initial == '.' && token != '.' && token != '...')) {
                     yield_(new TokenInfo(tokens.T_NUMBER, token, spos, epos, line));
