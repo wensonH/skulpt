@@ -472,7 +472,7 @@ var $builtinmodule = function (name) {
                 var self  = this,
                     state = this.getState(),
                     args  = Array.prototype.slice.call(arguments, stateChanges ? 2 : 3);
-
+                
                 return getFrameManager().addFrame(function() {
                     if (method) {
                         method.apply(state, args);
@@ -499,10 +499,14 @@ var $builtinmodule = function (name) {
                         fill    : this._fill,
                         filling : this._filling,
                         size    : this._size,
+                        type    : this._type,
                         speed   : this._computed_speed,
                         down    : this._down,
                         shown   : this._shown,
                         colorMode : this._colorMode,
+                        poly    : this._poly,
+                        creatingPoly : this._creatingPoly,
+                        resizemode: this._resizemode,
                         context : function() {
                             return self.getPaper();
                         }
@@ -517,6 +521,7 @@ var $builtinmodule = function (name) {
                     .then(function(coords) {
                         self._x = coords[0];
                         self._y = coords[1];
+                        if (self._creatingPoly) {self._poly.push([parseFloat(self._x.toFixed(2)), parseFloat(self._y.toFixed(2))]);}
                     });
             };
 
@@ -532,7 +537,7 @@ var $builtinmodule = function (name) {
             proto.queueMoveBy = function(startX, startY, theta, distance) {
                 var dx = Math.cos(theta) * distance,
                     dy = Math.sin(theta) * distance;
-
+                
                 return this.translate(startX, startY, dx, dy, true);
             };
 
@@ -566,12 +571,16 @@ var $builtinmodule = function (name) {
                 this._fill       = "black";
                 this._shape      = "classic";
                 this._size       = 1;
+                this._type       = "polygon";
                 this._filling    = false;
                 this._undoBuffer = [];
                 this._speed      = 3;
                 this._computed_speed = 5;
                 this._colorMode  = 1.0;
                 this._state      = undefined;
+                this._poly       = undefined;
+                this._creatingPoly = false;
+                this._resizemode = "noresize";
 
                 for(var key in this._managers) {
                     this._managers[key].reset();
@@ -1009,6 +1018,23 @@ var $builtinmodule = function (name) {
             };
             proto.$write.co_varnames = ["message", "move", "align", "font"];
             proto.$write.minArgs     = 1;
+            
+            proto.$resizemode = function (rmode) {
+                console.log("rmode", rmode,this);
+                
+                if (rmode && ["auto", "user", "noresize"].indexOf(rmode) > -1) {
+                    this._resizemode = rmode;
+
+                    console.log("_resizemode", this._resizemode);
+                    return this.addUpdate(undefined, this._shown, {resizemode : rmode});
+                }
+                return this._resizemode;
+            };
+            proto.$resizemode.minArgs = 0;
+            proto.$resizemode.co_varnames = ["rmode"];
+            proto.$resizemode.returnType = function() {
+                return new Sk.builtin.str(this._resizemode);
+            };
 
             proto.$pensize = proto.$width = function(size) {
                 if (size !== undefined) {
@@ -1141,10 +1167,14 @@ var $builtinmodule = function (name) {
                 newTurtleInstance.instance._fill = this._fill;
                 newTurtleInstance.instance._filling = this._filling;
                 newTurtleInstance.instance._size = this._size;
+                newTurtleInstance.instance._type = this._type;
                 newTurtleInstance.instance._computed_speed = this._computed_speed;
                 newTurtleInstance.instance._down = this._down;
                 newTurtleInstance.instance._shown = this._shown;
                 newTurtleInstance.instance._colorMode = this._colorMode;
+                newTurtleInstance.instance._poly = this._poly;
+                newTurtleInstance.instance._creatingPoly = this._creatingPoly;
+                newTurtleInstance.instance._resizemode = this._resizemode;
 
                 // Other properties to copy
                 newTurtleInstance.instance._isRadians = this._isRadians;
@@ -1167,6 +1197,26 @@ var $builtinmodule = function (name) {
             };
             proto.$getturtle.isSk = true;
 
+            proto.$begin_poly = function() {
+                this._poly = [this.$pos()];
+                this._creatingPoly = true;
+
+                return this.addUpdate(undefined, false, {poly: this._poly});
+                /**
+                 * Start recording the vertices of a polygon.
+                 */
+            };
+            proto.$begin_poly.minArgs = 0;
+            proto.$end_poly = function() {
+                this._creatingPoly = false;
+
+            };
+            proto.$end_poly.minArgs = 0;
+
+            proto.$get_poly = function() {
+                if (this._poly != undefined) {return this._poly;};
+            };
+            proto.$get_poly.minArgs = 0;
         })(Turtle.prototype);
 
         function Screen() {
@@ -1316,6 +1366,7 @@ var $builtinmodule = function (name) {
                 }
             };
             proto.$register_shape.minArgs = 1;
+            proto.$register_shape.co_varnames = ["name", "points"];
 
             proto.$getshapes = function() {
                 return Object.keys(SHAPES);
@@ -1420,6 +1471,23 @@ var $builtinmodule = function (name) {
 
                 return this._bgpic;
             };
+            // proto.$bgpic = function(name) {
+            //     var self;
+            //     if (name) {
+            //         self = this;
+            //         var img = new Image();
+            //         img.onload = function() {
+            //             clearLayer(self.bgLayer(), undefined, this);
+            //         };
+            //         img.onerror = function() {
+            //             reject(new Error("Missing asset: " + asset));
+            //         };
+            //         img.src = name;
+            //         return name;
+            //     }
+
+            //     return this._bgpic;
+            // };
             proto.$bgpic.minArgs = 0;
             proto.$bgpic.co_varnames = ["name"];
 
@@ -1692,7 +1760,9 @@ var $builtinmodule = function (name) {
                 context.translate(-llx, -ury);
             }
         }
-
+        function setShape(shape, type, data) {
+            SHAPES[shape].type = type;
+        }
         function pushUndo(turtle) {
             var properties, undoState, i;
 
@@ -1709,7 +1779,7 @@ var $builtinmodule = function (name) {
             }
 
             undoState  = {};
-            properties = "x y angle radians color fill down filling shown shape size".split(" ");
+            properties = "x y angle radians color fill down filling shown poly shape size".split(" ");
             for(i = 0; i < properties.length; i++) {
                 undoState[properties[i]] = turtle["_" + properties[i]];
             }
@@ -1779,7 +1849,24 @@ var $builtinmodule = function (name) {
 
             context.restore();
         }
-
+        function getShapePoly(state, shape) {
+            console.log(state, shape);
+            if (state.resizemode === "auto"){
+                var l = Math.max(1, state.size / 5.0);
+                var t11 = l,
+                    t12 = 0,
+                    t21 = 0,
+                    t22 = l;
+                return shape.map(function(coord) { 
+                    return [coord[0] * t11 + coord[1] * t12, coord[0] * t21 + coord[1] * t22];
+                });
+            } else if (state.resizemode === "user") {
+                return shape;
+                // context.lineWidth = state.outlinewidth;
+            } else{
+                return shape;
+            }
+        }
         function drawTurtle(state, context) {
             var shape  = SHAPES[state.shape],
                 world  = getScreen(),
@@ -1798,21 +1885,33 @@ var $builtinmodule = function (name) {
             context.save();
             context.translate(state.x, state.y);
             context.scale(xScale,yScale);
-
             if (shape.nodeName) {
-                context.rotate(bearing + Math.PI);
+
+                // Image shapes do not rotate when turning the turtle, so they do not display the heading of the turtle!
+                // context.rotate(bearing + Math.PI);
                 var iw = shape.naturalWidth;
                 var ih = shape.naturalHeight;
                 context.drawImage(shape, 0, 0, iw, ih, -iw/2, -ih/2, iw, ih);
             } else {
                 context.rotate(bearing);
                 context.beginPath();
-                context.lineWidth   = 1;
+                
+                if (state.resizemode === "auto"){
+                    context.lineWidth = state.size;
+
+                } else if (state.resizemode === "user") {
+                    context.lineWidth = state.outlinewidth;
+                } else{
+                    context.lineWidth = 1;
+                }
+                shape = getShapePoly(state, shape);
+                console.log("shape", shape);
+
                 context.strokeStyle = state.color;
                 context.fillStyle   = state.fill;
-                context.moveTo(shape[0][0], shape[0][1]);
+                context.moveTo(-shape[0][0], shape[0][1]);
                 for(var i = 1; i < shape.length; i++) {
-                    context.lineTo(shape[i][0], shape[i][1]);
+                    context.lineTo(-shape[i][0], shape[i][1]);
                 }
                 context.closePath();
                 context.fill();
@@ -1821,7 +1920,6 @@ var $builtinmodule = function (name) {
 
             context.restore();
         }
-
         function drawDot(size, color) {
             var context = this.context(),
                 screen  = getScreen(),
@@ -2299,6 +2397,9 @@ var $builtinmodule = function (name) {
         addModuleMethod(Screen, _module, "$done", getScreen);
         addModuleMethod(Screen, _module, "$bye", getScreen);
         addModuleMethod(Screen, _module, "$screensize", getScreen);
+        addModuleMethod(Screen, _module, "$register_shape", getScreen);
+        addModuleMethod(Screen, _module, "$bgcolor", getScreen);
+        addModuleMethod(Screen, _module, "$bgpic", getScreen);
         addModuleMethod(Screen, _module, "$tracer", getScreen);
         addModuleMethod(Screen, _module, "$update", getScreen);
         addModuleMethod(Screen, _module, "$delay", getScreen);
