@@ -1020,12 +1020,10 @@ var $builtinmodule = function (name) {
             proto.$write.minArgs     = 1;
             
             proto.$resizemode = function (rmode) {
-                console.log("rmode", rmode,this);
                 
                 if (rmode && ["auto", "user", "noresize"].indexOf(rmode) > -1) {
                     this._resizemode = rmode;
 
-                    console.log("_resizemode", this._resizemode);
                     return this.addUpdate(undefined, this._shown, {resizemode : rmode});
                 }
                 return this._resizemode;
@@ -1842,15 +1840,15 @@ var $builtinmodule = function (name) {
             } else {
                 context.clearRect(0, 0, context.canvas.width, context.canvas.height);
             }
-
             if (image) {
-                context.drawImage(image, 0, 0);
+                const dx = (context.canvas.width - image.width) / 2;
+                const dy = (context.canvas.height - image.height) / 2;
+                context.drawImage(image, dx, dy);
             }
 
             context.restore();
         }
         function getShapePoly(state, shape) {
-            console.log(state, shape);
             if (state.resizemode === "auto"){
                 var l = Math.max(1, state.size / 5.0);
                 var t11 = l,
@@ -1905,7 +1903,6 @@ var $builtinmodule = function (name) {
                     context.lineWidth = 1;
                 }
                 shape = getShapePoly(state, shape);
-                console.log("shape", shape);
 
                 context.strokeStyle = state.color;
                 context.fillStyle   = state.fill;
