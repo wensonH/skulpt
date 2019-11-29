@@ -507,6 +507,8 @@ var $builtinmodule = function (name) {
                         poly    : this._poly,
                         creatingPoly : this._creatingPoly,
                         resizemode: this._resizemode,
+                        stretchfactor: this._stretchfactor,
+                        outlinewidth: this._outlinewidth,
                         context : function() {
                             return self.getPaper();
                         }
@@ -581,6 +583,8 @@ var $builtinmodule = function (name) {
                 this._poly       = undefined;
                 this._creatingPoly = false;
                 this._resizemode = "noresize";
+                this._stretchfactor = [1,1];
+                this._outlinewidth = 1;
 
                 for(var key in this._managers) {
                     this._managers[key].reset();
@@ -1173,6 +1177,8 @@ var $builtinmodule = function (name) {
                 newTurtleInstance.instance._poly = this._poly;
                 newTurtleInstance.instance._creatingPoly = this._creatingPoly;
                 newTurtleInstance.instance._resizemode = this._resizemode;
+                newTurtleInstance.instance._stretchfactor = this._stretchfactor;
+                newTurtleInstance.instance._outlinewidth = this._outlinewidth;
 
                 // Other properties to copy
                 newTurtleInstance.instance._isRadians = this._isRadians;
@@ -1215,6 +1221,30 @@ var $builtinmodule = function (name) {
                 if (this._poly != undefined) {return this._poly;};
             };
             proto.$get_poly.minArgs = 0;
+
+            proto.$shapesize = function(stretch_wid,stretch_len,outline) {
+                if(!stretch_wid && !stretch_len && !outline){
+                    var stretch_wid=this._stretchfactor[0],
+                        t=this._stretchfactor[1];
+                    return[stretch_wid,stretch_len,this._outlinewidth];
+                }
+                if(0 === stretch_wid || 0 === stretch_len){
+                    throw new Sk.builtin.ValueError("stretch_wid or stretch_len must not be zero");
+                }
+                if (stretch_wid) {
+                    this._stretchfactor=stretch_len ? [stretch_wid,stretch_len] : [stretch_wid,stretch_wid];
+                } else if (stretch_len) {
+                    this._stretchfactor=[this.__stretchfactor[0], stretch_len];
+                }
+
+                if (!outline) {
+                    this._outlinewidth= outline;
+                }
+                
+                this.addUpdate(undefined,false,{outlinewidth:this._outlinewidth,stretchfactor:this._stretchfactor});
+            };
+            proto.$shapesize.minArgs=0;
+            proto.$shapesize.co_varnames=["stretch_wid","stretch_len","outline"];
         })(Turtle.prototype);
 
         function Screen() {
@@ -1469,23 +1499,6 @@ var $builtinmodule = function (name) {
 
                 return this._bgpic;
             };
-            // proto.$bgpic = function(name) {
-            //     var self;
-            //     if (name) {
-            //         self = this;
-            //         var img = new Image();
-            //         img.onload = function() {
-            //             clearLayer(self.bgLayer(), undefined, this);
-            //         };
-            //         img.onerror = function() {
-            //             reject(new Error("Missing asset: " + asset));
-            //         };
-            //         img.src = name;
-            //         return name;
-            //     }
-
-            //     return this._bgpic;
-            // };
             proto.$bgpic.minArgs = 0;
             proto.$bgpic.co_varnames = ["name"];
 
@@ -1870,8 +1883,8 @@ var $builtinmodule = function (name) {
                 world  = getScreen(),
                 width  = getWidth(),
                 height = getHeight(),
-                xScale = world.xScale,
-                yScale = world.yScale,
+                xScale = state.stretchfactor[0] || world.xScale,
+                yScale = state.stretchfactor[1] || world.yScale,
                 x, y, bearing;
 
             if (!context) {return;}
