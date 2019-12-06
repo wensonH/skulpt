@@ -32,7 +32,7 @@ var $builtinmodule = function (name) {
                 animate    : true, // enabled/disable all animated rendering
                 bufferSize : 0, // default turtle buffer size
                 allowUndo  : true, // enable ability to use the undo buffer
-                assets     : {}
+                assets     : {},
             },
             _frameRequest,
             _frameRequestTimeout,
@@ -1035,7 +1035,7 @@ var $builtinmodule = function (name) {
             proto.$resizemode.minArgs = 0;
             proto.$resizemode.co_varnames = ["rmode"];
             proto.$resizemode.returnType = function() {
-                return new Sk.builtin.str(this._resizemode);
+                
             };
 
             proto.$pensize = proto.$width = function(size) {
@@ -1663,6 +1663,12 @@ var $builtinmodule = function (name) {
             };
             proto.$ontimer.minArgs = 0;
             proto.$ontimer.co_varnames = ["method", "interval"];
+
+            proto.$title = function(titlestring) {
+                getTitleTarget().innerHTML = titlestring;
+            };
+            proto.$title.minArgs = 0;
+            proto.$title.co_varnames = ["titlestring"];
         })(Screen.prototype);
 
         function ensureAnonymous() {
@@ -1675,6 +1681,15 @@ var $builtinmodule = function (name) {
 
         function getTarget() {
             return _target;
+        }
+
+        function getTitleTarget() {
+            var selector, target;
+            selector = (Sk.TurtleGraphics && Sk.TurtleGraphics.titleTarget) || "turtleTitle",
+            target   = typeof selector === "string" ?
+                document.getElementById(selector) :
+                selector;
+            return target;
         }
 
         function getScreen() {
@@ -1916,7 +1931,6 @@ var $builtinmodule = function (name) {
                     context.lineWidth = 1;
                 }
                 shape = getShapePoly(state, shape);
-
                 context.strokeStyle = state.color;
                 context.fillStyle   = state.fill;
                 context.moveTo(-shape[0][0], shape[0][1]);
@@ -2410,6 +2424,7 @@ var $builtinmodule = function (name) {
         addModuleMethod(Screen, _module, "$register_shape", getScreen);
         addModuleMethod(Screen, _module, "$bgcolor", getScreen);
         addModuleMethod(Screen, _module, "$bgpic", getScreen);
+        addModuleMethod(Screen, _module, "$title", getScreen);
         addModuleMethod(Screen, _module, "$tracer", getScreen);
         addModuleMethod(Screen, _module, "$update", getScreen);
         addModuleMethod(Screen, _module, "$delay", getScreen);
